@@ -1,7 +1,7 @@
 <?php
 session_start();
 
-define('DATA_DIR', __DIR__ . '/../data');
+define('DATA_DIR', dirname(__DIR__, 2) . '/data');
 define('USER_DIR', DATA_DIR . '/users');
 define('PASSWORD_HISTORY_DIR', DATA_DIR . '/password_history');
 define('SIGNALS_DIR', DATA_DIR . '/signals');

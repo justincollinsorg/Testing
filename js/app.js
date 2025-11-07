@@ -1,5 +1,3 @@
-/* global bootstrap */
-
 const AppState = {
     user: null,
     heartbeatTimer: null,
@@ -13,7 +11,7 @@ const AppState = {
     eventStreamConnected: false,
     pendingOffer: null,
     pendingCandidates: [],
-    callModal: null
+    callBanner: null
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -74,13 +72,17 @@ function bindAuthForms() {
 function showFormMessage(form, result) {
     const el = document.querySelector(`.form-message[data-for="${form}"]`);
     if (!el) return;
+    el.classList.remove('d-none', 'text-success', 'text-danger');
     if (result.success) {
-        el.style.color = '#28a745';
+        el.classList.add('text-success');
         el.textContent = 'Success!';
     } else {
-        el.style.color = '#c00';
+        el.classList.add('text-danger');
         el.textContent = result.error || 'Request failed';
     }
+    setTimeout(() => {
+        el.classList.add('d-none');
+    }, 4000);
 }
 
 async function bootstrapMessenger() {
@@ -92,15 +94,6 @@ async function bootstrapMessenger() {
 function enterMessenger() {
     document.getElementById('auth-section')?.classList.add('hidden');
     document.getElementById('messenger')?.classList.remove('hidden');
-    const startBtn = document.getElementById('start-call-btn');
-    if (startBtn && !startBtn.dataset.bound) {
-        startBtn.dataset.bound = 'true';
-        startBtn.addEventListener('click', () => {
-            if (AppState.callTarget) {
-                startCall(AppState.callTarget);
-            }
-        });
-    }
     const hangupBtn = document.getElementById('hangup-btn');
     if (hangupBtn && !hangupBtn.dataset.bound) {
         hangupBtn.dataset.bound = 'true';
@@ -118,24 +111,15 @@ function enterMessenger() {
         passwordForm.dataset.bound = 'true';
         passwordForm.addEventListener('submit', handlePasswordChange);
     }
-    initializeCallModal();
+    initializeCallBanner();
     scheduleHeartbeat();
     bindIncomingCallActions();
     initializeEventStream();
     updateState();
 }
 
-function initializeCallModal() {
-    const modalEl = document.getElementById('call-notification-modal');
-    if (!modalEl || typeof bootstrap === 'undefined') {
-        return;
-    }
-    if (!AppState.callModal) {
-        AppState.callModal = new bootstrap.Modal(modalEl, {
-            backdrop: 'static',
-            keyboard: false
-        });
-    }
+function initializeCallBanner() {
+    AppState.callBanner = document.getElementById('incoming-call-banner');
 }
 
 async function fetchCurrentUser() {
@@ -175,22 +159,71 @@ function renderOnlineUsers(users) {
         .sort((a, b) => a.username.localeCompare(b.username))
         .forEach((user) => {
             const li = document.createElement('li');
+            li.className = 'list-group-item';
+            if (AppState.callTarget === user.username) {
+                li.classList.add('active-call-target');
+            }
+
+            const meta = document.createElement('div');
+            meta.className = 'user-meta';
+
             const name = document.createElement('span');
-            name.textContent = `${user.displayName || user.username} ${user.online ? '(online)' : '(offline)'}`;
+            name.textContent = user.displayName || user.username;
+
+            const presence = document.createElement('span');
+            presence.className = user.online ? 'badge text-bg-success' : 'badge text-bg-secondary';
+            presence.textContent = user.online ? 'Online' : 'Offline';
+
+            meta.appendChild(name);
+            meta.appendChild(presence);
+
+            const actionRow = document.createElement('div');
+            actionRow.className = 'd-flex justify-content-between align-items-center gap-2';
+
+            const details = document.createElement('div');
+            details.className = 'text-muted small';
+            details.textContent = user.username;
+
             const btn = document.createElement('button');
-            btn.textContent = 'Call';
+            btn.className = `btn btn-sm ${user.online ? 'btn-primary' : 'btn-outline-secondary'}`;
+            btn.textContent = user.online ? 'Call' : 'Unavailable';
             btn.disabled = !user.online;
-            btn.addEventListener('click', () => {
+            btn.dataset.username = user.username;
+            btn.dataset.online = user.online ? '1' : '0';
+            btn.addEventListener('click', async () => {
+                if (!user.online) return;
                 AppState.callTarget = user.username;
-                document.getElementById('start-call-btn').disabled = false;
-                document.querySelectorAll('#online-list button').forEach((b) => b.classList.remove('calling'));
-                btn.classList.add('calling');
-                addLog(`Selected ${user.username} for a call.`);
+                highlightCallTarget(user.username);
+                addLog(`Starting call with ${user.username}.`);
+                await startCall(user.username);
             });
-            li.appendChild(name);
-            li.appendChild(btn);
+
+            actionRow.appendChild(details);
+            actionRow.appendChild(btn);
+
+            li.appendChild(meta);
+            li.appendChild(actionRow);
             list.appendChild(li);
         });
+    if (!list.children.length) {
+        const empty = document.createElement('li');
+        empty.className = 'list-group-item text-center text-muted py-3 shadow-none';
+        empty.textContent = 'No other users available right now.';
+        list.appendChild(empty);
+    }
+    setCallButtons(Boolean(AppState.callId));
+}
+
+function highlightCallTarget(username) {
+    document.querySelectorAll('#online-list .list-group-item').forEach((item) => {
+        const button = item.querySelector('button[data-username]');
+        if (!button) return;
+        if (button.dataset.username === username) {
+            item.classList.add('active-call-target');
+        } else {
+            item.classList.remove('active-call-target');
+        }
+    });
 }
 
 function scheduleHeartbeat() {
@@ -296,6 +329,8 @@ async function handleIncomingAnswer(signal) {
     if (!AppState.peerConnection) return;
     if (signal.callId !== AppState.callId) return;
     await AppState.peerConnection.setRemoteDescription(new RTCSessionDescription(signal.payload));
+    AppState.isCaller = false;
+    setCallButtons(true);
     addLog(`Connected with ${signal.from}`);
 }
 
@@ -339,12 +374,13 @@ function showIncomingCall(caller) {
     const nameEl = document.getElementById('caller-name');
     if (!nameEl) return;
     nameEl.textContent = caller;
-    AppState.callModal?.show();
+    AppState.callBanner?.classList.remove('d-none');
+    highlightCallTarget(caller);
     addLog(`Incoming call from ${caller}`);
 }
 
 function hideIncomingCall() {
-    AppState.callModal?.hide();
+    AppState.callBanner?.classList.add('d-none');
 }
 
 async function acceptIncomingCall() {
@@ -372,6 +408,7 @@ async function declineIncomingCall() {
     AppState.isCaller = false;
     await sendSignal(offer.from, 'hangup', {}, offer.callId);
     addLog(`Declined call from ${offer.from}`);
+    highlightCallTarget('');
 }
 
 async function completeIncomingOffer(signal) {
@@ -386,6 +423,7 @@ async function completeIncomingOffer(signal) {
     await pc.setLocalDescription(answer);
     await sendSignal(signal.from, 'answer', answer, AppState.callId);
     await applyPendingCandidates();
+    highlightCallTarget(signal.from);
     setCallButtons(true);
 }
 
@@ -489,8 +527,7 @@ async function endCall() {
     AppState.pendingOffer = null;
     AppState.pendingCandidates = [];
     document.getElementById('remote-video').srcObject = null;
-    document.getElementById('start-call-btn').disabled = true;
-    document.querySelectorAll('#online-list button').forEach((b) => b.classList.remove('calling'));
+    document.querySelectorAll('#online-list .list-group-item').forEach((item) => item.classList.remove('active-call-target'));
     hideIncomingCall();
 }
 
@@ -501,8 +538,35 @@ window.addEventListener('beforeunload', () => {
 });
 
 function setCallButtons(active) {
-    document.getElementById('start-call-btn').disabled = active;
     document.getElementById('hangup-btn').disabled = !active;
+    document.querySelectorAll('#online-list button[data-username]').forEach((btn) => {
+        const isOnline = btn.dataset.online === '1';
+        const isTarget = AppState.callTarget && btn.dataset.username === AppState.callTarget;
+        btn.disabled = active ? true : !isOnline;
+        if (active && isTarget) {
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-warning');
+            btn.textContent = AppState.isCaller ? 'Calling…' : 'Connected';
+        } else if (!isOnline) {
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-outline-secondary');
+            btn.textContent = 'Unavailable';
+        } else if (!active) {
+            btn.classList.remove('btn-warning');
+            btn.classList.remove('btn-outline-secondary');
+            btn.classList.add('btn-primary');
+            btn.textContent = 'Call';
+        } else if (active && !isTarget) {
+            btn.classList.remove('btn-primary');
+            btn.classList.remove('btn-warning');
+            btn.classList.add('btn-outline-secondary');
+            btn.textContent = 'Busy';
+        }
+    });
+    const helper = document.getElementById('call-helper-text');
+    if (helper) {
+        helper.textContent = active ? 'You are in a call.' : 'Select an online user to start a call.';
+    }
 }
 
 async function updateStatusMessage() {
@@ -516,15 +580,19 @@ async function updateStatusMessage() {
     });
     const data = await res.json();
     const statusResult = document.getElementById('status-result');
+    statusResult.classList.remove('text-success', 'text-danger', 'text-muted');
     if (data.success) {
         statusResult.textContent = 'Status updated!';
-        statusResult.style.color = '#28a745';
+        statusResult.classList.add('text-success');
         addLog('Status updated to: ' + status);
     } else {
         statusResult.textContent = data.error || 'Failed to update status';
-        statusResult.style.color = '#c00';
+        statusResult.classList.add('text-danger');
     }
-    setTimeout(() => (statusResult.textContent = ''), 3000);
+    setTimeout(() => {
+        statusResult.textContent = '';
+        statusResult.classList.add('text-muted');
+    }, 3000);
 }
 
 async function handlePasswordChange(event) {
@@ -532,9 +600,10 @@ async function handlePasswordChange(event) {
     const password = document.getElementById('new-password').value;
     const confirm = document.getElementById('confirm-password').value;
     const resultEl = document.getElementById('password-result');
+    resultEl.classList.remove('text-success', 'text-danger');
     if (password !== confirm) {
         resultEl.textContent = 'Passwords do not match';
-        resultEl.style.color = '#c00';
+        resultEl.classList.add('text-danger');
         return;
     }
     const res = await fetch('api/change_password.php', {
@@ -545,21 +614,28 @@ async function handlePasswordChange(event) {
     const data = await res.json();
     if (data.success) {
         resultEl.textContent = 'Password updated!';
-        resultEl.style.color = '#28a745';
+        resultEl.classList.add('text-success');
         document.getElementById('password-form').reset();
         addLog('Password changed successfully');
         updateState();
     } else {
         resultEl.textContent = data.error || 'Failed to update password';
-        resultEl.style.color = '#c00';
+        resultEl.classList.add('text-danger');
     }
-    setTimeout(() => (resultEl.textContent = ''), 3000);
+    setTimeout(() => {
+        resultEl.textContent = '';
+        resultEl.classList.remove('text-success', 'text-danger');
+    }, 3000);
 }
 
 function addLog(message) {
     const list = document.getElementById('call-log-list');
     if (!list) return;
     const li = document.createElement('li');
+    li.className = 'list-group-item';
     li.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
     list.prepend(li);
+    while (list.children.length > 50) {
+        list.removeChild(list.lastElementChild);
+    }
 }
