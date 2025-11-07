@@ -100,6 +100,15 @@ $loggedIn = isset($_SESSION['username']);
                             <button id="start-call-btn" disabled>Start Call</button>
                             <button id="hangup-btn" disabled>Hang Up</button>
                         </div>
+                        <div id="call-notification" class="call-notification hidden">
+                            <div class="call-notification__content">
+                                <p><strong id="caller-name"></strong> is calling...</p>
+                                <div class="call-notification__actions">
+                                    <button id="accept-call-btn" class="accept">Accept</button>
+                                    <button id="decline-call-btn" class="decline">Decline</button>
+                                </div>
+                            </div>
+                        </div>
                         <div class="call-log">
                             <h4>Call &amp; Message Log</h4>
                             <ul id="call-log-list"></ul>
