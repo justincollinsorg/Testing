@@ -40,6 +40,43 @@ function write_json($path, $data) {
     rename($tmp, $path);
 }
 
+function load_all_users_with_presence()
+{
+    $users = [];
+    $now = time();
+    foreach (glob(USER_DIR . '/*.json') as $file) {
+        $data = read_json($file);
+        if ($now - ($data['lastSeen'] ?? 0) > 12) {
+            $data['online'] = false;
+            write_json($file, $data);
+        }
+        if (isset($data['username'])) {
+            $users[$data['username']] = $data;
+        }
+    }
+
+    return $users;
+}
+
+function build_state_snapshot($currentUser)
+{
+    $users = load_all_users_with_presence();
+    $passwordHistory = read_json(get_password_history_path($currentUser), []);
+
+    $sessions = [];
+    foreach (glob(SESSIONS_DIR . '/*.json') as $sessionFile) {
+        $sessions[] = read_json($sessionFile);
+    }
+
+    return [
+        'currentUser' => $users[$currentUser] ?? null,
+        'passwordHistory' => $passwordHistory,
+        'users' => array_values($users),
+        'sessions' => $sessions,
+        'serverTime' => time()
+    ];
+}
+
 function locked_file_operation($path, callable $callback, $default = []) {
     $dir = dirname($path);
     if (!is_dir($dir)) {

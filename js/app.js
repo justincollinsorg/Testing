@@ -1,13 +1,16 @@
 const AppState = {
     user: null,
-    stateTimer: null,
     heartbeatTimer: null,
-    signalTimer: null,
     peerConnection: null,
     localStream: null,
     callTarget: null,
     callId: null,
-    isCaller: false
+    isCaller: false,
+    eventSource: null,
+    eventReconnectTimer: null,
+    eventStreamConnected: false,
+    pendingOffer: null,
+    pendingCandidates: []
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -112,21 +115,16 @@ function enterMessenger() {
         passwordForm.dataset.bound = 'true';
         passwordForm.addEventListener('submit', handlePasswordChange);
     }
-    scheduleStateUpdates();
     scheduleHeartbeat();
-    scheduleSignalPolling();
+    bindIncomingCallActions();
+    initializeEventStream();
+    updateState();
 }
 
 async function fetchCurrentUser() {
     const res = await fetch('api/me.php');
     const data = await res.json();
     AppState.user = data.user;
-}
-
-function scheduleStateUpdates() {
-    updateState();
-    if (AppState.stateTimer) clearInterval(AppState.stateTimer);
-    AppState.stateTimer = setInterval(updateState, 4000);
 }
 
 async function updateState() {
@@ -186,19 +184,6 @@ function scheduleHeartbeat() {
 
 async function heartbeat() {
     await fetch('api/heartbeat.php', { method: 'POST' });
-}
-
-function scheduleSignalPolling() {
-    pollSignals();
-    if (AppState.signalTimer) clearInterval(AppState.signalTimer);
-    AppState.signalTimer = setInterval(pollSignals, 2000);
-}
-
-async function pollSignals() {
-    const res = await fetch('api/signals.php?action=poll');
-    if (!res.ok) return;
-    const data = await res.json();
-    (data.signals || []).forEach(handleSignal);
 }
 
 async function handleSignal(signal) {
@@ -262,6 +247,8 @@ async function startCall(target) {
         AppState.callId = `call-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         AppState.callTarget = target;
         AppState.isCaller = true;
+        AppState.pendingOffer = null;
+        AppState.pendingCandidates = [];
         const stream = await ensureLocalStream();
         const pc = createPeerConnection();
         stream.getTracks().forEach((track) => pc.addTrack(track, stream));
@@ -283,15 +270,9 @@ async function handleIncomingOffer(signal) {
     AppState.callTarget = signal.from;
     AppState.callId = signal.callId;
     AppState.isCaller = false;
-    const stream = await ensureLocalStream();
-    const pc = createPeerConnection();
-    stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-    await pc.setRemoteDescription(new RTCSessionDescription(signal.payload));
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    await sendSignal(signal.from, 'answer', answer, AppState.callId);
-    addLog(`Answering call from ${signal.from}`);
-    setCallButtons(true);
+    AppState.pendingOffer = signal;
+    AppState.pendingCandidates = [];
+    showIncomingCall(signal.from);
 }
 
 async function handleIncomingAnswer(signal) {
@@ -302,13 +283,161 @@ async function handleIncomingAnswer(signal) {
 }
 
 async function handleIncomingCandidate(signal) {
-    if (!AppState.peerConnection) return;
-    if (signal.callId !== AppState.callId) return;
+    if (AppState.callId && signal.callId !== AppState.callId) {
+        return;
+    }
+    if (!AppState.pendingOffer && !AppState.peerConnection) {
+        return;
+    }
+    if (!AppState.peerConnection) {
+        AppState.pendingCandidates.push(signal);
+        return;
+    }
     try {
         await AppState.peerConnection.addIceCandidate(new RTCIceCandidate(signal.payload));
     } catch (err) {
         addLog('Error adding ICE candidate: ' + err.message);
     }
+}
+
+function bindIncomingCallActions() {
+    const acceptBtn = document.getElementById('accept-call-btn');
+    if (acceptBtn && !acceptBtn.dataset.bound) {
+        acceptBtn.dataset.bound = 'true';
+        acceptBtn.addEventListener('click', acceptIncomingCall);
+    }
+    const declineBtn = document.getElementById('decline-call-btn');
+    if (declineBtn && !declineBtn.dataset.bound) {
+        declineBtn.dataset.bound = 'true';
+        declineBtn.addEventListener('click', declineIncomingCall);
+    }
+}
+
+function showIncomingCall(caller) {
+    const container = document.getElementById('call-notification');
+    const nameEl = document.getElementById('caller-name');
+    if (!container || !nameEl) return;
+    nameEl.textContent = caller;
+    container.classList.remove('hidden');
+    addLog(`Incoming call from ${caller}`);
+}
+
+function hideIncomingCall() {
+    const container = document.getElementById('call-notification');
+    if (!container) return;
+    container.classList.add('hidden');
+}
+
+async function acceptIncomingCall() {
+    if (!AppState.pendingOffer) return;
+    const offer = AppState.pendingOffer;
+    hideIncomingCall();
+    try {
+        await completeIncomingOffer(offer);
+        AppState.pendingOffer = null;
+        addLog(`Answering call from ${offer.from}`);
+    } catch (err) {
+        addLog('Failed to answer call: ' + err.message);
+        await endCall();
+    }
+}
+
+async function declineIncomingCall() {
+    if (!AppState.pendingOffer) return;
+    const offer = AppState.pendingOffer;
+    hideIncomingCall();
+    AppState.pendingOffer = null;
+    AppState.pendingCandidates = [];
+    AppState.callId = null;
+    AppState.callTarget = null;
+    AppState.isCaller = false;
+    await sendSignal(offer.from, 'hangup', {}, offer.callId);
+    addLog(`Declined call from ${offer.from}`);
+}
+
+async function completeIncomingOffer(signal) {
+    AppState.callTarget = signal.from;
+    AppState.callId = signal.callId;
+    AppState.isCaller = false;
+    const stream = await ensureLocalStream();
+    const pc = createPeerConnection();
+    stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+    await pc.setRemoteDescription(new RTCSessionDescription(signal.payload));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await sendSignal(signal.from, 'answer', answer, AppState.callId);
+    await applyPendingCandidates();
+    setCallButtons(true);
+}
+
+async function applyPendingCandidates() {
+    if (!AppState.peerConnection) return;
+    const candidates = [...AppState.pendingCandidates];
+    AppState.pendingCandidates = [];
+    for (const candidateSignal of candidates) {
+        try {
+            await AppState.peerConnection.addIceCandidate(new RTCIceCandidate(candidateSignal.payload));
+        } catch (err) {
+            addLog('Error adding buffered ICE candidate: ' + err.message);
+        }
+    }
+}
+
+function initializeEventStream() {
+    if (AppState.eventSource) {
+        return;
+    }
+    const source = new EventSource('api/events.php');
+    AppState.eventSource = source;
+
+    source.addEventListener('state', (event) => {
+        try {
+            const state = JSON.parse(event.data);
+            AppState.user = state.currentUser;
+            renderState(state);
+            renderOnlineUsers(state.users || []);
+        } catch (err) {
+            console.error('Failed to parse state event', err);
+        }
+    });
+
+    source.addEventListener('signal', (event) => {
+        try {
+            const signal = JSON.parse(event.data);
+            handleSignal(signal);
+        } catch (err) {
+            console.error('Failed to parse signal event', err);
+        }
+    });
+
+    source.addEventListener('ping', () => {});
+
+    source.onopen = () => {
+        if (!AppState.eventStreamConnected) {
+            addLog('Connected to live updates.');
+        }
+        AppState.eventStreamConnected = true;
+    };
+
+    source.onerror = () => {
+        if (AppState.eventSource) {
+            AppState.eventSource.close();
+            AppState.eventSource = null;
+        }
+        if (AppState.eventStreamConnected) {
+            AppState.eventStreamConnected = false;
+            addLog('Connection to live updates lost. Reconnecting...');
+        }
+        scheduleEventStreamReconnect();
+    };
+}
+
+function scheduleEventStreamReconnect() {
+    if (AppState.eventReconnectTimer) return;
+    AppState.eventReconnectTimer = setTimeout(() => {
+        AppState.eventReconnectTimer = null;
+        initializeEventStream();
+    }, 3000);
 }
 
 async function sendSignal(target, type, payload, callId) {
@@ -338,10 +467,19 @@ async function endCall() {
     AppState.callId = null;
     AppState.callTarget = null;
     AppState.isCaller = false;
+    AppState.pendingOffer = null;
+    AppState.pendingCandidates = [];
     document.getElementById('remote-video').srcObject = null;
     document.getElementById('start-call-btn').disabled = true;
     document.querySelectorAll('#online-list button').forEach((b) => b.classList.remove('calling'));
+    hideIncomingCall();
 }
+
+window.addEventListener('beforeunload', () => {
+    if (AppState.eventSource) {
+        AppState.eventSource.close();
+    }
+});
 
 function setCallButtons(active) {
     document.getElementById('start-call-btn').disabled = active;
