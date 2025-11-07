@@ -1,3 +1,5 @@
+/* global bootstrap */
+
 const AppState = {
     user: null,
     heartbeatTimer: null,
@@ -10,7 +12,8 @@ const AppState = {
     eventReconnectTimer: null,
     eventStreamConnected: false,
     pendingOffer: null,
-    pendingCandidates: []
+    pendingCandidates: [],
+    callModal: null
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -115,10 +118,24 @@ function enterMessenger() {
         passwordForm.dataset.bound = 'true';
         passwordForm.addEventListener('submit', handlePasswordChange);
     }
+    initializeCallModal();
     scheduleHeartbeat();
     bindIncomingCallActions();
     initializeEventStream();
     updateState();
+}
+
+function initializeCallModal() {
+    const modalEl = document.getElementById('call-notification-modal');
+    if (!modalEl || typeof bootstrap === 'undefined') {
+        return;
+    }
+    if (!AppState.callModal) {
+        AppState.callModal = new bootstrap.Modal(modalEl, {
+            backdrop: 'static',
+            keyboard: false
+        });
+    }
 }
 
 async function fetchCurrentUser() {
@@ -311,21 +328,23 @@ function bindIncomingCallActions() {
         declineBtn.dataset.bound = 'true';
         declineBtn.addEventListener('click', declineIncomingCall);
     }
+    const dismissBtn = document.getElementById('dismiss-call-btn');
+    if (dismissBtn && !dismissBtn.dataset.bound) {
+        dismissBtn.dataset.bound = 'true';
+        dismissBtn.addEventListener('click', declineIncomingCall);
+    }
 }
 
 function showIncomingCall(caller) {
-    const container = document.getElementById('call-notification');
     const nameEl = document.getElementById('caller-name');
-    if (!container || !nameEl) return;
+    if (!nameEl) return;
     nameEl.textContent = caller;
-    container.classList.remove('hidden');
+    AppState.callModal?.show();
     addLog(`Incoming call from ${caller}`);
 }
 
 function hideIncomingCall() {
-    const container = document.getElementById('call-notification');
-    if (!container) return;
-    container.classList.add('hidden');
+    AppState.callModal?.hide();
 }
 
 async function acceptIncomingCall() {

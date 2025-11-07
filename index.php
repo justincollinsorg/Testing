@@ -7,6 +7,7 @@ $loggedIn = isset($_SESSION['username']);
 <head>
     <meta charset="UTF-8">
     <title>PHP Messenger Video Call</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -100,12 +101,20 @@ $loggedIn = isset($_SESSION['username']);
                             <button id="start-call-btn" disabled>Start Call</button>
                             <button id="hangup-btn" disabled>Hang Up</button>
                         </div>
-                        <div id="call-notification" class="call-notification hidden">
-                            <div class="call-notification__content">
-                                <p><strong id="caller-name"></strong> is calling...</p>
-                                <div class="call-notification__actions">
-                                    <button id="accept-call-btn" class="accept">Accept</button>
-                                    <button id="decline-call-btn" class="decline">Decline</button>
+                        <div class="modal fade" id="call-notification-modal" tabindex="-1" aria-labelledby="incomingCallLabel" aria-hidden="true">
+                            <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title" id="incomingCallLabel">Incoming Call</h5>
+                                        <button id="dismiss-call-btn" type="button" class="btn-close" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <p class="mb-0"><strong id="caller-name"></strong> is calling...</p>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button id="decline-call-btn" type="button" class="btn btn-outline-danger">Decline</button>
+                                        <button id="accept-call-btn" type="button" class="btn btn-success">Accept</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -118,6 +127,7 @@ $loggedIn = isset($_SESSION['username']);
             </section>
         </main>
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
