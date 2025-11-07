@@ -1,92 +1,206 @@
 body {
-    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
-    min-height: 100vh;
+    font-family: Arial, sans-serif;
+    margin: 0;
+    background: #f5f5f5;
+    color: #333;
 }
 
 .hidden {
     display: none !important;
 }
 
-.navbar-brand {
-    letter-spacing: 0.04em;
+#app {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
 }
 
-#incoming-call-banner {
-    position: fixed;
-    top: 5.5rem;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 1080;
-    border-radius: 1rem;
-    width: min(480px, 90vw);
-}
-
-#state-json {
-    height: 240px;
-    overflow-y: auto;
-    font-family: "JetBrains Mono", "Fira Code", monospace;
-}
-
-#online-list {
-    max-height: 320px;
-    overflow-y: auto;
-}
-
-#online-list .list-group-item {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    border: 0;
-    border-radius: 0.75rem;
-    margin-bottom: 0.75rem;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-}
-
-#online-list .list-group-item:last-child {
-    margin-bottom: 0;
-}
-
-#online-list .list-group-item.shadow-none {
-    box-shadow: none;
-    border: 1px dashed rgba(15, 23, 42, 0.08);
-    background-color: rgba(var(--bs-light-rgb), 0.4);
-    margin-bottom: 0;
-}
-
-#online-list .list-group-item .user-meta {
+header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 0.5rem;
+    margin-bottom: 20px;
 }
 
-#online-list .list-group-item .user-meta span {
-    font-weight: 600;
+header h1 {
+    margin: 0;
 }
 
-#online-list .list-group-item.active-call-target {
-    border: 1px solid rgba(var(--bs-primary-rgb), 0.4);
-    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.15);
+.panel {
+    background: #fff;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.video-tile video {
-    object-fit: cover;
+.panel.hidden {
+    display: none;
 }
 
-#call-log-list {
-    max-height: 240px;
-    overflow-y: auto;
+#auth-section {
+    display: flex;
+    gap: 20px;
+    justify-content: space-between;
 }
 
-#call-log-list .list-group-item {
-    border: 0;
-    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+.form-container {
+    flex: 1;
 }
 
-#call-log-list .list-group-item:last-child {
-    border-bottom: 0;
+form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+label {
+    display: flex;
+    flex-direction: column;
+    font-weight: bold;
+}
+
+input[type="text"],
+input[type="password"] {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+button {
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    background-color: #0069d9;
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+button:disabled {
+    background-color: #888;
+    cursor: not-allowed;
 }
 
 .form-message {
-    transition: opacity 0.2s ease;
+    min-height: 20px;
+    font-size: 12px;
+    color: #c00;
 }
+
+#messenger {
+    display: flex;
+    gap: 20px;
+}
+
+#sidebar {
+    width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+#state-json {
+    background: #222;
+    color: #0f0;
+    padding: 10px;
+    border-radius: 4px;
+    height: 180px;
+    overflow-y: auto;
+}
+
+#online-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+#online-list li {
+    padding: 8px;
+    background: #eef;
+    border-radius: 4px;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#online-list li span {
+    font-weight: bold;
+}
+
+#chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+#status-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#password-bar form {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+}
+
+#password-bar label {
+    font-weight: bold;
+}
+
+#password-bar input[type="password"] {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+#call-area {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.videos {
+    display: flex;
+    gap: 20px;
+}
+
+.videos video {
+    width: 100%;
+    max-height: 240px;
+    background: #000;
+    border-radius: 4px;
+}
+
+.call-log {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+.call-log ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.call-log li {
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+
+.online-users button {
+    background-color: #28a745;
+}
+
+.online-users button.calling {
+    background-color: #dc3545;
+}
+
+/* Call notification styling is provided by the Bootstrap modal markup */
+
