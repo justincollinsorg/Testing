@@ -1,0 +1,9 @@
+{
+  "openAiApiKey": "YOUR_OPENAI_API_KEY",
+  "visionModel": "gpt-4o-mini",
+  "analysisModel": "gpt-4o-mini",
+  "pollIntervalMs": 1000,
+  "maxConcurrentAnalyses": 1,
+  "boardRecognitionPrompt": "You are a chessboard recognition engine. Analyze the provided image of a chess position and output JSON with fields fen (FEN string describing the board, side to move, castling, en passant, halfmove, fullmove) and confidence (0-1). Return ONLY JSON.",
+  "moveSuggestionPrompt": "You are a strong chess engine. Given the FEN position, respond in JSON with bestMove (in UCI) and reasoning (a short string). Return ONLY JSON."
+}
